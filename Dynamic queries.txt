@@ -1,0 +1,233 @@
+ Possible SQL Queries
+ 
+ 
+ A) Fetch All Data (Admin Access)
+
+SELECT *  
+FROM (  
+    SELECT * FROM OPENROWSET(  
+        BULK '{SYNAPSE_QUERY_PATH}/{sheetId}.parquet',  
+        FORMAT = 'PARQUET'  
+    ) [result]  
+    ORDER BY createdDate DESC  
+    OFFSET 0 ROWS  
+    FETCH NEXT 50 ROWS ONLY  
+) AS sub;
+
+---> Use case: Admin fetching all records without any access restrictions.
+
+
+
+B) Apply Row-Level Access (User-Specific Data)
+
+SELECT *  
+FROM (  
+    SELECT * FROM OPENROWSET(  
+        BULK '{SYNAPSE_QUERY_PATH}/{sheetId}.parquet',  
+        FORMAT = 'PARQUET'  
+    ) [result]  
+    WHERE createdBy = 'JohnDoe'  
+    ORDER BY createdDate DESC  
+    OFFSET 0 ROWS  
+    FETCH NEXT 50 ROWS ONLY  
+) AS sub;
+
+---> Use case: Fetching data only created by a specific user.
+
+
+
+C) Apply Row-Level Access (Hierarchy Level)
+
+SELECT *  
+FROM (  
+    SELECT * FROM OPENROWSET(  
+        BULK '{SYNAPSE_QUERY_PATH}/{sheetId}.parquet',  
+        FORMAT = 'PARQUET'  
+    ) [result]  
+    WHERE createdBy IN ('User1', 'User2', 'User3')  
+    ORDER BY createdDate DESC  
+    OFFSET 0 ROWS  
+    FETCH NEXT 50 ROWS ONLY  
+) AS sub;
+
+---> Fetching records created by users in a specific hierarchy.
+
+
+
+D) Apply Column-Level Access (Restricted Columns)
+
+SELECT id, name, status  
+FROM (  
+    SELECT * FROM OPENROWSET(  
+        BULK '{SYNAPSE_QUERY_PATH}/{sheetId}.parquet',  
+        FORMAT = 'PARQUET'  
+    ) [result]  
+    WHERE createdBy = 'JohnDoe'  
+    ORDER BY createdDate DESC  
+    OFFSET 0 ROWS  
+    FETCH NEXT 50 ROWS ONLY  
+) AS sub;
+
+---> Use case: User can only access specific columns (id, name, status).
+
+
+
+E) Apply Filtering (Status & Category)
+
+SELECT *  
+FROM (  
+    SELECT * FROM OPENROWSET(  
+        BULK '{SYNAPSE_QUERY_PATH}/{sheetId}.parquet',  
+        FORMAT = 'PARQUET'  
+    ) [result]  
+    WHERE status = 'active'  
+          AND category = 'Finance'  
+    ORDER BY createdDate DESC  
+    OFFSET 0 ROWS  
+    FETCH NEXT 50 ROWS ONLY  
+) AS sub;
+
+---> Use case: Filtering data where status = 'active' and category = 'Finance'.
+
+
+
+F) Apply Sorting (Sort by Name)
+
+SELECT *  
+FROM (  
+    SELECT * FROM OPENROWSET(  
+        BULK '{SYNAPSE_QUERY_PATH}/{sheetId}.parquet',  
+        FORMAT = 'PARQUET'  
+    ) [result]  
+    ORDER BY name ASC  
+    OFFSET 0 ROWS  
+    FETCH NEXT 50 ROWS ONLY  
+) AS sub;
+
+---> Use case: Sorting results alphabetically by name.
+
+
+
+G) Apply Sorting + Filtering + Row-Level Access (Full Combination)
+
+SELECT id, name, status  
+FROM (  
+    SELECT * FROM OPENROWSET(  
+        BULK '{SYNAPSE_QUERY_PATH}/{sheetId}.parquet',  
+        FORMAT = 'PARQUET'  
+    ) [result]  
+    WHERE createdBy IN ('User1', 'User2')  
+          AND status = 'active'  
+          AND category = 'IT'  
+    ORDER BY lastUpdated DESC  
+    OFFSET 10 ROWS  
+    FETCH NEXT 20 ROWS ONLY  
+) AS sub;
+
+---> Use case:
+		-> Applies row-level access (Hierarchy Users)
+		-> Applies column-level restrictions (id, name, status)
+		-> Applies filtering (status = 'active', category = 'IT')
+		-> Applies sorting (last updated date)
+		-> Applies pagination (fetches 20 rows after skipping 10 rows)
+		
+
+
+Some more queries:
+
+a) Status = 'all'
+
+SELECT * FROM (
+    SELECT * FROM OPENROWSET(
+        BULK '{SYNAPSE_QUERY_PATH}/{sheetId}.parquet',
+        FORMAT = 'PARQUET'
+    ) [result]
+    WHERE status = 'active' AND approval_status IN ('approved', 'draft') AND {common_condition}
+    ORDER BY CAST(_id AS DECIMAL(18, 9))
+    OFFSET {start_chunk} ROWS
+    FETCH NEXT {end_chunk - start_chunk} ROWS ONLY
+) AS sub
+
+	---> Functionality:
+			-> Retrieves all active records.
+			-> Includes records where the approval status is either 'approved' or 'draft'.
+			-> Applies pagination (OFFSET and FETCH NEXT).
+			
+		
+    b) Status = 'approved'
+
+	SELECT * FROM (
+    SELECT * FROM OPENROWSET(
+        BULK '{SYNAPSE_QUERY_PATH}/{sheetId}.parquet',
+        FORMAT = 'PARQUET'
+    ) [result]
+    WHERE status = 'active' AND approved_by = '{userName}' AND approval_status = 'approved' AND {common_condition}
+    ORDER BY CAST(_id AS DECIMAL(18, 9))
+    OFFSET {start_chunk} ROWS
+    FETCH NEXT {end_chunk - start_chunk} ROWS ONLY
+) AS sub
+
+	---> Functionality:
+			-> Retrieves only approved records.
+			-> Ensures that the current user (userName) is the approver.
+			-> Applies pagination.
+
+		
+	c) Status = 'active'
+	
+	SELECT * FROM (
+    SELECT * FROM OPENROWSET(
+        BULK '{SYNAPSE_QUERY_PATH}/{sheetId}.parquet',
+        FORMAT = 'PARQUET'
+    ) [result]
+    WHERE status = 'active' AND {common_condition}
+    ORDER BY CAST(_id AS DECIMAL(18, 9))
+    OFFSET {start_chunk} ROWS
+    FETCH NEXT {end_chunk - start_chunk} ROWS ONLY
+) AS sub
+
+	---> Functionality:
+			-> Retrieves only active records.
+			-> No additional approval conditions.
+			-> Applies pagination.
+			
+	d) Status = Other (e.g., 'submitted')
+	
+	SELECT * FROM (
+    SELECT * FROM OPENROWSET(
+        BULK '{SYNAPSE_QUERY_PATH}/{sheetId}.parquet',
+        FORMAT = 'PARQUET'
+    ) [result]
+    WHERE status IN ('active', 'delete') AND approval_status = 'submitted' AND {common_condition}
+    ORDER BY CAST(_id AS DECIMAL(18, 9))
+    OFFSET {start_chunk} ROWS
+    FETCH NEXT {end_chunk - start_chunk} ROWS ONLY
+) AS sub
+
+	----> Functionality:
+			-> Retrieves active and deleted records.
+			-> Ensures that only submitted approval statuses are included.
+			-> Applies pagination.
+			
+		
+		
+	2. Hierarchy Access (access='Hierarchy' or 'Project_Hierarchy')
+	
+	SELECT * FROM (
+    SELECT * FROM OPENROWSET(
+        BULK '{SYNAPSE_QUERY_PATH}/{sheetId}.parquet',
+        FORMAT = 'PARQUET'
+    ) [result]
+    WHERE status = 'active' AND createdBy IN ({heirarchyUsers}) AND approval_status IN ('approved', 'draft') AND {common_condition}
+    ORDER BY CAST(_id AS DECIMAL(18, 9))
+    OFFSET {start_chunk} ROWS
+    FETCH NEXT {end_chunk - start_chunk} ROWS ONLY
+) AS sub
+
+	----> Functionality:
+			-> Retrieves active records.
+			Filters records where the creator (createdBy) is in the hierarchy users list.
+			-> Includes records with 'approved' or 'draft' approval status.
+			-> Applies pagination.
+
+
